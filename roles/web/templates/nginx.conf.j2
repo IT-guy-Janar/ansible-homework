@@ -1,0 +1,35 @@
+# Redirect HTTP to HTTPS
+server {
+    listen {{ nginx_http_port }};
+    server_name {{ ansible_host }};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen {{ nginx_https_port }} ssl;
+    server_name {{ ansible_host }};
+
+    # TLS configuration
+    ssl_certificate {{ nginx_cert_dir }}/nginx.crt;
+    ssl_certificate_key {{ nginx_cert_dir }}/nginx.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    root {{ nginx_web_root }};
+    index index.html;
+
+    # Main page with basic auth
+    location / {
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        autoindex on;
+    }
+
+    # Serve Samba shared directory contents
+    location /{{ samba_mount_point | relpath(nginx_web_root) }} {
+        alias {{ samba_mount_point }};
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        autoindex on;
+    }
+}

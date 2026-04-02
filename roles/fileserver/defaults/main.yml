@@ -1,0 +1,7 @@
+# Samba shared directory
+samba_share_path: /shared
+samba_share_name: shared
+
+# Firewall
+samba_port_tcp: "445"
+samba_port_udp: "137-138"

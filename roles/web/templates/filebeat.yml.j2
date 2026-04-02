@@ -1,0 +1,14 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/nginx/*.log
+
+output.elasticsearch:
+  hosts:
+{% for host in groups['elasticsearch'] %}
+    - "https://{{ hostvars[host]['ansible_host'] }}:{{ es_http_port }}"
+{% endfor %}
+  username: "{{ vault_filebeat_user }}"
+  password: "{{ vault_filebeat_pass }}"
+  ssl.verification_mode: none

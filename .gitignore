@@ -1,0 +1,3 @@
+# Ansible
+.vault_pass
+group_vars/common/vault.yml

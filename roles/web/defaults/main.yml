@@ -1,0 +1,12 @@
+# Nginx settings
+nginx_http_port: 80
+nginx_https_port: 443
+nginx_web_root: /var/www/html
+
+# TLS
+nginx_cert_dir: /etc/nginx/certs
+nginx_cert_validity_days: 365
+
+# Samba mount
+samba_mount_point: /var/www/html/shared
+samba_share_name: shared

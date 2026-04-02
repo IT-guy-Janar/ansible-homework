@@ -1,0 +1,110 @@
+# Install and configure Samba file server
+
+- name: Update all available packages
+  dnf:
+    name: "*"
+    state: latest
+
+- name: Install Samba packages
+  dnf:
+    name:
+      - samba
+      - samba-common
+      - samba-client
+    state: present
+
+- name: Create shared directory
+  file:
+    path: "{{ samba_share_path }}"
+    state: directory
+    mode: '0775'
+    owner: root
+    group: root
+
+- name: Create Samba user from vault
+  shell: |
+    id {{ vault_samba_user }} || useradd -M -s /sbin/nologin {{ vault_samba_user }}
+    (echo {{ vault_samba_pass }}; echo {{ vault_samba_pass }}) | smbpasswd -a -s {{ vault_samba_user }}
+  no_log: true
+  changed_when: false
+
+- name: Grant Samba user RWX access via ACL
+  acl:
+    path: "{{ samba_share_path }}"
+    entity: "{{ vault_samba_user }}"
+    etype: user
+    permissions: rwx
+    state: present
+  changed_when: false
+
+- name: Set default ACL so new files inherit permissions
+  acl:
+    path: "{{ samba_share_path }}"
+    entity: "{{ vault_samba_user }}"
+    etype: user
+    permissions: rwx
+    state: present
+    default: true
+
+- name: Set SELinux context on shared directory
+  command: chcon -t samba_share_t {{ samba_share_path }}
+  changed_when: false
+
+- name: Deploy smb.conf configuration
+  template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart samba
+
+- name: Allow Samba through firewall
+  firewalld:
+    service: samba
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: Enable and start Samba services
+  systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - smb
+    - nmb
+
+# Install and configure Filebeat
+- name: Add Elastic repository for Filebeat
+  copy:
+    dest: /etc/yum.repos.d/elastic.repo
+    content: |
+      [elastic]
+      name=Elastic repository
+      baseurl=https://artifacts.elastic.co/packages/8.x/yum
+      gpgcheck=1
+      gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+      enabled=1
+      autorefresh=1
+      type=rpm-md
+
+- name: Install Filebeat
+  dnf:
+    name: filebeat
+    state: latest
+
+- name: Deploy Filebeat configuration
+  template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart filebeat
+
+- name: Enable and start Filebeat
+  systemd:
+    name: filebeat
+    enabled: true
+    state: started

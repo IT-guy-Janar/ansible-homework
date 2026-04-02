@@ -1,0 +1,9 @@
+- name: restart samba
+  systemd:
+    name: smb
+    state: restarted
+
+- name: restart filebeat
+  systemd:
+    name: filebeat
+    state: restarted

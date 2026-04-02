@@ -1,0 +1,15 @@
+---
+- name: Configure Elasticsearch nodes
+  hosts: elasticsearch
+  roles:
+    - elasticsearch
+
+- name: Configure file server
+  hosts: fileserver
+  roles:
+    - fileserver
+
+- name: Configure web server
+  hosts: web
+  roles:
+    - web

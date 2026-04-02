@@ -1,0 +1,3 @@
+# Elasticsearch connection for Filebeat (available to all servers)
+es_host: "{{ hostvars[groups['elasticsearch'][0]]['ansible_host'] }}"
+es_http_port: 9200

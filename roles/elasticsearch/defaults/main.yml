@@ -1,0 +1,12 @@
+# Cluster settings
+es_cluster_name: "es-cluster"
+es_http_port: 9200
+es_transport_port: 9300
+
+# Directories
+es_data_dir: "/var/lib/elasticsearch"
+es_log_dir: "/var/log/elasticsearch"
+es_cert_dir: "/etc/elasticsearch/certs"
+
+# TLS
+es_cert_validity_days: 365

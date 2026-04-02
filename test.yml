@@ -1,0 +1,78 @@
+---
+- name: Elasticsearch tests
+  hosts: elasticsearch
+  tasks:
+    - name: "Elasticsearch is listening on port {{ es_http_port }}"
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ es_http_port }}"
+        timeout: 10
+      ignore_errors: true
+
+- name: Other hosts can reach Elasticsearch
+  hosts: web:fileserver
+  tasks:
+    - name: "Elasticsearch HTTP port is reachable"
+      wait_for:
+        host: "{{ hostvars[item]['ansible_host'] }}"
+        port: "{{ hostvars[groups['elasticsearch'][0]]['es_http_port'] }}"
+        timeout: 10
+      loop: "{{ groups['elasticsearch'] }}"
+      loop_control:
+        label: "{{ inventory_hostname }} -> {{ item }}"
+      ignore_errors: true
+
+- name: Web server tests
+  hosts: web
+  tasks:
+    - name: "Nginx responds with HTTP 200 using valid credentials"
+      uri:
+        url: "https://{{ ansible_host }}/"
+        user: "{{ vault_web_user }}"
+        password: "{{ vault_web_pass }}"
+        validate_certs: false
+        status_code: 200
+      ignore_errors: true
+
+- name: Samba tests
+  hosts: fileserver
+  vars_files:
+    - roles/fileserver/defaults/main.yml
+  tasks:
+    - name: "Share '{{ samba_share_name }}' is defined in Samba configuration"
+      shell: testparm -s /etc/samba/smb.conf 2>/dev/null | grep -q '^\[{{ samba_share_name }}\]'
+      changed_when: false
+      register: share_check
+      ignore_errors: true
+
+    - name: "Share '{{ samba_share_name }}' configuration is valid"
+      assert:
+        that: share_check.rc == 0
+        fail_msg: "Share '{{ samba_share_name }}' not found in Samba configuration"
+      ignore_errors: true
+
+    - name: "Shared directory '{{ samba_share_path }}' exists on filesystem"
+      stat:
+        path: "{{ samba_share_path }}"
+      register: share_dir
+
+    - name: "Shared directory '{{ samba_share_path }}' is a valid directory"
+      assert:
+        that: share_dir.stat.exists and share_dir.stat.isdir
+        fail_msg: "Shared directory {{ samba_share_path }} does not exist"
+      ignore_errors: true
+
+- name: All hosts can reach Samba
+  hosts: all
+  vars_files:
+    - roles/fileserver/defaults/main.yml
+  tasks:
+    - name: "Samba port {{ samba_port_tcp }} is reachable"
+      wait_for:
+        host: "{{ hostvars[item]['ansible_host'] }}"
+        port: "{{ samba_port_tcp }}"
+        timeout: 10
+      loop: "{{ groups['fileserver'] }}"
+      loop_control:
+        label: "{{ inventory_hostname }} -> {{ item }}"
+      ignore_errors: true

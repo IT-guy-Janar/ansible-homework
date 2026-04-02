@@ -1,0 +1,209 @@
+# Install and configure Nginx web server with HTTPS and Samba mount
+
+- name: Update all available packages
+  dnf:
+    name: "*"
+    state: latest
+
+- name: Install required packages
+  dnf:
+    name:
+      - nginx
+      - cifs-utils
+      - python3-pip
+      - python3-libselinux
+      - python3-libsemanage
+    state: present
+
+- name: Install passlib via pip
+  pip:
+    name: passlib
+    state: present
+
+- name: Create TLS certificate directory
+  file:
+    path: "{{ nginx_cert_dir }}"
+    state: directory
+    owner: root
+    group: nginx
+    mode: '0750'
+
+- name: Generate TLS private key
+  command: >
+    openssl genrsa -out {{ nginx_cert_dir }}/nginx.key 2048
+  args:
+    creates: "{{ nginx_cert_dir }}/nginx.key"
+
+- name: Generate OpenSSL config with SAN
+  copy:
+    dest: "{{ nginx_cert_dir }}/openssl.cnf"
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      x509_extensions = v3_req
+      prompt = no
+
+      [req_distinguished_name]
+      CN = {{ inventory_hostname }}
+
+      [v3_req]
+      subjectAltName = @alt_names
+
+      [alt_names]
+      DNS.1 = {{ inventory_hostname }}
+      IP.1 = {{ ansible_host }}
+
+- name: Generate TLS certificate with SAN
+  command: >
+    openssl req -new -x509
+    -key {{ nginx_cert_dir }}/nginx.key
+    -out {{ nginx_cert_dir }}/nginx.crt
+    -days {{ nginx_cert_validity_days }}
+    -config {{ nginx_cert_dir }}/openssl.cnf
+  args:
+    creates: "{{ nginx_cert_dir }}/nginx.crt"
+
+- name: Set correct permissions on TLS files
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: nginx
+    mode: '0640'
+  loop:
+    - "{{ nginx_cert_dir }}/nginx.key"
+    - "{{ nginx_cert_dir }}/nginx.crt"
+
+- name: Create Nginx web root
+  file:
+    path: "{{ nginx_web_root }}"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: '0755'
+
+- name: Create Samba mount point
+  file:
+    path: "{{ samba_mount_point }}"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: '0755'
+
+- name: Create credentials file for Samba mount
+  copy:
+    dest: /etc/samba/srvweb.creds
+    content: |
+      username={{ vault_samba_user }}
+      password={{ vault_samba_pass }}
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+
+- name: Mount Samba share
+  mount:
+    path: "{{ samba_mount_point }}"
+    src: "//{{ hostvars[groups['fileserver'][0]]['ansible_host'] }}/{{ samba_share_name }}"
+    fstype: cifs
+    opts: "credentials=/etc/samba/srvweb.creds,uid=nginx,gid=nginx,file_mode=0664,dir_mode=0775"
+    state: mounted
+
+- name: Deploy index.html
+  copy:
+    dest: "{{ nginx_web_root }}/index.html"
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head><title>Web Server</title></head>
+      <body>
+        <h1>Welcome</h1>
+        <p><a href="/{{ samba_mount_point | relpath(nginx_web_root) }}">Shared files</a></p>
+      </body>
+      </html>
+    owner: nginx
+    group: nginx
+    mode: '0644'
+
+- name: Create htpasswd file for basic auth
+  htpasswd:
+    path: /etc/nginx/.htpasswd
+    name: "{{ vault_web_user }}"
+    password: "{{ vault_web_pass }}"
+    owner: root
+    group: nginx
+    mode: '0640'
+
+- name: Deploy Nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/conf.d/web.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nginx
+
+- name: Remove default Nginx config
+  file:
+    path: /etc/nginx/conf.d/default.conf
+    state: absent
+  notify: restart nginx
+
+- name: Allow Nginx to read CIFS mounts via SELinux
+  seboolean:
+    name: httpd_use_cifs
+    state: true
+    persistent: true
+
+- name: Enable and start Nginx
+  systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Allow HTTP port through firewall
+  firewalld:
+    port: "{{ nginx_http_port }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: Allow HTTPS port through firewall
+  firewalld:
+    port: "{{ nginx_https_port }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+
+# Install and configure Filebeat
+- name: Add Elastic repository for Filebeat
+  copy:
+    dest: /etc/yum.repos.d/elastic.repo
+    content: |
+      [elastic]
+      name=Elastic repository
+      baseurl=https://artifacts.elastic.co/packages/8.x/yum
+      gpgcheck=1
+      gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+      enabled=1
+      autorefresh=1
+      type=rpm-md
+
+- name: Install Filebeat
+  dnf:
+    name: filebeat
+    state: latest
+
+- name: Deploy Filebeat configuration
+  template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart filebeat
+
+- name: Enable and start Filebeat
+  systemd:
+    name: filebeat
+    enabled: true
+    state: started

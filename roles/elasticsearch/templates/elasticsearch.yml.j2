@@ -1,0 +1,35 @@
+# Cluster settings
+cluster.name: {{ es_cluster_name }}
+node.name: {{ inventory_hostname }}
+
+# Network — binds to the host's IP from inventory
+network.host: {{ ansible_host }}
+http.port: {{ es_http_port }}
+transport.port: {{ es_transport_port }}
+
+# Paths
+path.data: {{ es_data_dir }}
+path.logs: {{ es_log_dir }}
+
+# Discovery — dynamically built from inventory, scales to multiple nodes
+discovery.seed_hosts:
+{% for host in groups['elasticsearch'] %}
+  - {{ hostvars[host]['ansible_host'] }}
+{% endfor %}
+
+cluster.initial_master_nodes:
+{% for host in groups['elasticsearch'] %}
+  - {{ host }}
+{% endfor %}
+
+# TLS for HTTP layer
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.key: {{ es_cert_dir }}/elasticsearch.key
+xpack.security.http.ssl.certificate: {{ es_cert_dir }}/elasticsearch.crt
+
+# TLS for transport layer (node-to-node)
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.key: {{ es_cert_dir }}/elasticsearch.key
+xpack.security.transport.ssl.certificate: {{ es_cert_dir }}/elasticsearch.crt
+xpack.security.transport.ssl.verification_mode: none
