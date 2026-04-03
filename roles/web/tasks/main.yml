@@ -5,6 +5,19 @@
     name: "*"
     state: latest
 
+- name: Install firewalld and python3-firewall
+  dnf:
+    name:
+      - firewalld
+      - python3-firewall
+    state: present
+
+- name: Enable and start firewalld
+  systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
 - name: Install required packages
   dnf:
     name:

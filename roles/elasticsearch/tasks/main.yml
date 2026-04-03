@@ -5,6 +5,19 @@
     name: "*"
     state: latest
 
+- name: Install firewalld and python3-firewall
+  dnf:
+    name:
+      - firewalld
+      - python3-firewall
+    state: present
+
+- name: Enable and start firewalld
+  systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
 - name: Import Elasticsearch GPG key
   rpm_key:
     key: https://artifacts.elastic.co/GPG-KEY-elasticsearch

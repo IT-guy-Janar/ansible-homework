@@ -1,7 +1,8 @@
 Ansible playbook for configuring an Elasticsearch, Nginx and Samba infrastructure with Filebeat log shipping.
 
 This playbook has been tested on:
-* Rocky Linux 9
+* Rocky Linux 9 (minimal install)
+* Rocky Linux 9 (cloud image)
 
 ## Requirements
 
@@ -26,15 +27,18 @@ ansible-vault create group_vars/common/vault.yml
 The vault must contain the following variables:
 ```yaml
 # SSH credentials for srves
-vault_srves_user: root
+# User must have sudo privileges
+vault_srves_user: your_user
 vault_srves_pass: your_password
 
 # SSH credentials for srvweb
-vault_srvweb_user: root
+# User must have sudo privileges
+vault_srvweb_user: your_user
 vault_srvweb_pass: your_password
 
 # SSH credentials for srvfile
-vault_srvfile_user: root
+# User must have sudo privileges
+vault_srvfile_user: your_user
 vault_srvfile_pass: your_password
 
 # Elasticsearch superuser (elastic)

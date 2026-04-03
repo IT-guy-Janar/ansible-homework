@@ -1,15 +1,18 @@
 ---
 - name: Configure Elasticsearch nodes
   hosts: elasticsearch
+  become: true
   roles:
     - elasticsearch
 
 - name: Configure file server
   hosts: fileserver
+  become: true
   roles:
     - fileserver
 
 - name: Configure web server
   hosts: web
+  become: true
   roles:
     - web
